@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>河北高考投档线查询 (专业级筛选版)</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+        
+        .controls { display: flex; flex-wrap: wrap; gap: 15px; padding: 20px; background: #eef2f7; border-radius: 8px; margin-bottom: 20px; align-items: flex-end; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        .control-group label { font-weight: bold; font-size: 0.9em; color: #555; }
+        input[type="number"], input[type="file"], select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 9px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        button.reset { background-color: #95a5a6; }
+        button.reset:hover { background-color: #7f8c8d; }
+
+        /* 分割线 */
+        .divider { width: 1px; background: #ddd; margin: 0 10px; height: 40px; align-self: center; }
+
+        #result-area { display: flex; flex-direction: column; gap: 10px; }
+        .college-card { border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; transition: all 0.2s; }
+        .college-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .college-header { padding: 15px 20px; background: #fff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #3498db; }
+        .college-header:hover { background: #f8fbff; }
+        .college-name { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
+        .college-meta { font-size: 0.9em; color: #7f8c8d; }
+        .min-score-badge { background: #e74c3c; color: white; padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 0.9em; }
+        
+        .majors-table { width: 100%; border-collapse: collapse; display: none; background: #fafafa; }
+        .majors-table th, .majors-table td { padding: 12px 20px; text-align: left; border-bottom: 1px solid #eee; }
+        .majors-table th { background: #f1f1f1; color: #555; font-weight: 600; }
+        
+        .college-card.active .majors-table { display: table; }
+        .arrow { transition: transform 0.2s; }
+        .college-card.active .arrow { transform: rotate(90deg); }
+
+        .empty-state { text-align: center; color: #999; padding: 40px; }
+        .filter-tag { background: #3498db; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-right: 5px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎓 河北高考投档线查询 (专业级筛选版)</h1>
+
+    <div class="controls">
+        <!-- 文件上传 -->
+        <div class="control-group">
+            <label>1. 上传数据</label>
+            <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" />
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 功能4：院校级筛选 -->
+        <div class="control-group">
+            <label>2. 院校投档分区间 (按学校门槛筛)</label>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <input type="number" id="collegeMin" placeholder="最低" style="width: 70px;">
+                <span>-</span>
+                <input type="number" id="collegeMax" placeholder="最高" style="width: 70px;">
+            </div>
+        </div>
+
+        <!-- 功能5：专业级筛选 (新增) -->
+        <div class="control-group">
+            <label>3. 专业投档分区间 (按具体专业筛)</label>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <input type="number" id="majorMin" placeholder="最低" style="width: 70px;">
+                <span>-</span>
+                <input type="number" id="majorMax" placeholder="最高" style="width: 70px;">
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 类别筛选 -->
+        <div class="control-group">
+            <label>4. 专业类别</label>
+            <select id="categoryFilter">
+                <option value="all">全部类别</option>
+            </select>
+        </div>
+
+        <button onclick="applyFilters()">🔍 筛选</button>
+        <button class="reset" onclick="resetFilters()">↺ 重置</button>
+    </div>
+
+    <div id="result-area">
+        <div class="empty-state">请上传 Excel 或 CSV 文件开始分析</div>
+    </div>
+</div>
+
+<script>
+    let processedData = [];
+    let allCategories = new Set();
+
+    // 专业关键词映射 (用于自动分类)
+    const categoryKeywords = {
+        "计算机类": ["计算机", "软件", "人工智能", "大数据", "电子信息", "通信", "电子", "智能", "网络", "信息安全", "物联网"],
+        "医学类": ["临床", "医学", "口腔", "药学", "护理", "中医", "针灸", "康复", "检验", "麻醉"],
+        "经济管理类": ["经济", "金融", "会计", "工商", "贸易", "财政", "税务", "审计", "管理", "营销"],
+        "理工科": ["数学", "物理", "化学", "材料", "机械", "电气", "自动化", "土木", "工程", "车辆", "能源", "力学", "地质"],
+        "人文社科": ["法学", "教育", "英语", "日语", "汉语言", "新闻", "传播", "历史", "哲学", "政治", "社会学"],
+        "其他专业": []
+    };
+
+    function getCategoryFromMajorName(majorName) {
+        if (!majorName) return "未知";
+        for (const [category, keywords] of Object.entries(categoryKeywords)) {
+            if (category === "其他专业") continue;
+            if (keywords.some(keyword => majorName.includes(keyword))) {
+                return category;
+            }
+        }
+        return "其他专业";
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
+                const rows = json.slice(5); 
+                processData(rows);
+            } catch (error) {
+                alert("文件解析出错: " + error.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function processData(rows) {
+        processedData = [];
+        allCategories.clear();
+        const groups = {};
+
+        rows.forEach(row => {
+            const collegeName = row[1]; 
+            const majorName = row[3]; 
+            const score = parseFloat(row[4]) || 0; 
+
+            if (!collegeName || !majorName || score <= 0) return;
+
+            const category = getCategoryFromMajorName(majorName);
+            allCategories.add(category);
+
+            if (!groups[collegeName]) {
+                groups[collegeName] = {
+                    name: collegeName,
+                    majors: [],
+                    minScore: Infinity
+                };
+            }
+
+            groups[collegeName].majors.push({ name: majorName, category: category, score: score });
+            if (score < groups[collegeName].minScore) {
+                groups[collegeName].minScore = score;
+            }
+        });
+
+        processedData = Object.values(groups).sort((a, b) => b.minScore - a.minScore);
+
+        const select = document.getElementById('categoryFilter');
+        select.innerHTML = '<option value="all">全部类别</option>';
+        Array.from(allCategories).sort().forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            select.appendChild(option);
+        });
+
+        renderList(processedData);
+    }
+
+    function renderList(data) {
+        const container = document.getElementById('result-area');
+        container.innerHTML = '';
+
+        if (data.length === 0) {
+            container.innerHTML = '<div class="empty-state">没有找到符合条件的数据</div>';
+            return;
+        }
+
+        data.forEach((college, index) => {
+            const card = document.createElement('div');
+            card.className = 'college-card';
+            
+            const header = document.createElement('div');
+            header.className = 'college-header';
+            header.onclick = () => toggleCard(card);
+            
+            // 显示该校筛选后的最低分
+            const currentMin = Math.min(...college.majors.map(m => m.score));
+            
+            header.innerHTML = `
+                <div>
+                    <div class="college-name">${index + 1}. ${college.name}</div>
+                    <div class="college-meta">
+                        ${college.majors.length > 0 ? `<span class="filter-tag">显示 ${college.majors.length} 个专业</span>` : ''}
+                        投档线: ${currentMin}
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <span class="min-score-badge">最低: ${currentMin}</span>
+                    <span class="arrow">▶</span>
+                </div>
+            `;
+
+            const table = document.createElement('table');
+            table.className = 'majors-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>专业名称</th>
+                        <th>类别</th>
+                        <th>投档分</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${college.majors.map(m => `
+                        <tr>
+                            <td>${m.name}</td>
+                            <td><span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em;">${m.category}</span></td>
+                            <td style="color:#e74c3c; font-weight:bold;">${m.score}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            `;
+
+            card.appendChild(header);
+            card.appendChild(table);
+            container.appendChild(card);
+        });
+    }
+
+    function toggleCard(card) {
+        card.classList.toggle('active');
+    }
+
+    function applyFilters() {
+        // 获取输入值
+        const cMin = document.getElementById('collegeMin').value;
+        const cMax = document.getElementById('collegeMax').value;
+        const mMin = document.getElementById('majorMin').value;
+        const mMax = document.getElementById('majorMax').value;
+        const catVal = document.getElementById('categoryFilter').value;
+
+        const collegeMinScore = cMin ? parseFloat(cMin) : -Infinity;
+        const collegeMaxScore = cMax ? parseFloat(cMax) : Infinity;
+        const majorMinScore = mMin ? parseFloat(mMin) : -Infinity;
+        const majorMaxScore = mMax ? parseFloat(mMax) : Infinity;
+
+        // 核心筛选逻辑
+        let result = processedData.map(college => {
+            // 1. 先检查院校门槛 (如果填了院校区间)
+            if (college.minScore < collegeMinScore || college.minScore > collegeMaxScore) {
+                return null; // 院校门槛不够，直接淘汰
+            }
+
+            // 2. 专业级筛选 (如果填了专业区间)
+            // 过滤出符合分数要求的专业
+            let validMajors = college.majors.filter(m => {
+                return m.score >= majorMinScore && m.score <= majorMaxScore;
+            });
+
+            // 3. 类别筛选
+            if (catVal !== 'all') {
+                validMajors = validMajors.filter(m => m.category === catVal);
+            }
+
+            // 4. 如果使用了专业筛选器，但该校没有符合的专业，则该校不显示
+            // 注意：如果用户没填专业区间，则默认保留所有专业
+            const hasMajorFilter = (mMin !== '' || mMax !== '');
+            if (hasMajorFilter && validMajors.length === 0) {
+                return null;
+            }
+
+            // 5. 返回结果 (如果没填专业筛选，validMajors可能为空，此时应显示原专业)
+            // 修正：如果没填专业筛选，validMajors 应该是原专业列表
+            if (!hasMajorFilter) validMajors = college.majors;
+
+            return {
+                ...college,
+                majors: validMajors,
+                minScore: Math.min(...validMajors.map(m => m.score)) // 重新计算显示用的最低分
+            };
+
+        }).filter(item => item !== null); // 移除被淘汰的学校
+
+        // 排序：按新的最低分降序
+        result.sort((a, b) => b.minScore - a.minScore);
+
+        renderList(result);
+    }
+
+    function resetFilters() {
+        document.getElementById('collegeMin').value = '';
+        document.getElementById('collegeMax').value = '';
+        document.getElementById('majorMin').value = '';
+        document.getElementById('majorMax').value = '';
+        document.getElementById('categoryFilter').value = 'all';
+        renderList(processedData);
+    }
+</script>
+</body>
+</html>
