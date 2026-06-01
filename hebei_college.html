@@ -51,8 +51,16 @@
     <div class="controls">
         <!-- 文件上传 -->
         <div class="control-group">
-            <label>1. 上传数据</label>
-            <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" />
+            <label>1. 选择年份或上传数据</label>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <select id="yearSelect" onchange="loadYearData()">
+                    <option value="">-- 选择年份 --</option>
+                    <option value="2024">2024</option>
+                    <option value="2025">2025</option>
+                </select>
+                <span style="color: #777;">或</span>
+                <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" />
+            </div>
         </div>
 
         <div class="divider"></div>
@@ -119,6 +127,34 @@
             }
         }
         return "其他专业";
+    }
+
+    function loadYearData() {
+        const year = document.getElementById('yearSelect').value;
+        if (!year) return;
+
+        const filename = year === '2024' ? '20240722163024_933.xlsx' : '20250722214852_210.xlsx';
+        
+        fetch(filename)
+            .then(response => {
+                if (!response.ok) throw new Error('网络请求失败');
+                return response.arrayBuffer();
+            })
+            .then(buffer => {
+                try {
+                    const data = new Uint8Array(buffer);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
+                    const rows = json.slice(5); 
+                    processData(rows);
+                } catch (error) {
+                    alert("文件解析出错: " + error.message);
+                }
+            })
+            .catch(error => {
+                alert("加载文件失败: " + error.message);
+            });
     }
 
     document.getElementById('fileInput').addEventListener('change', function(e) {
