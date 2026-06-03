@@ -51,8 +51,12 @@
     <div class="controls">
         <!-- 文件上传 -->
         <div class="control-group">
-            <label>1. 选择年份或上传数据</label>
+            <label>1. 选择数据类型和年份</label>
             <div style="display: flex; gap: 5px; align-items: center;">
+                <select id="typeSelect" onchange="loadYearData()">
+                    <option value="regular">普通批次</option>
+                    <option value="gjzha">国家专项计划</option>
+                </select>
                 <select id="yearSelect" onchange="loadYearData()">
                     <option value="">-- 选择年份 --</option>
                     <option value="2024">2024</option>
@@ -131,11 +135,19 @@
 
     function loadYearData() {
         const year = document.getElementById('yearSelect').value;
+        const type = document.getElementById('typeSelect').value;
+        
         if (!year) return;
 
         document.getElementById('result-area').innerHTML = '<div class="empty-state">正在加载数据...</div>';
         
-        fetch('data_' + year + '.json')
+        let filename = 'data_' + year;
+        if (type === 'gjzha') {
+            filename += '_gjzha';
+        }
+        filename += '.json';
+        
+        fetch(filename)
             .then(response => {
                 if (!response.ok) throw new Error('HTTP error, status = ' + response.status);
                 return response.json();
@@ -144,7 +156,7 @@
                 if (rows && rows.length > 0) {
                     processData(rows);
                 } else {
-                    alert("未找到" + year + "年的数据");
+                    alert("未找到该年份和类型的数据");
                     document.getElementById('result-area').innerHTML = '<div class="empty-state">未找到数据</div>';
                 }
             })
