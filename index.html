@@ -134,28 +134,36 @@
         if (!year) return;
 
         const filename = year === '2024' ? '20240722163024_933.xlsx' : '20250722214852_210.xlsx';
+        const fileUrl = window.location.origin + '/' + filename;
         
         document.getElementById('result-area').innerHTML = '<div class="empty-state">正在加载数据...</div>';
         
-        fetch(filename)
+        console.log('Loading file:', fileUrl);
+        
+        fetch(fileUrl)
             .then(response => {
-                if (!response.ok) throw new Error('网络请求失败');
+                console.log('Response status:', response.status);
+                if (!response.ok) throw new Error('HTTP error, status = ' + response.status);
                 return response.arrayBuffer();
             })
             .then(buffer => {
+                console.log('File loaded, size:', buffer.byteLength);
                 try {
                     const data = new Uint8Array(buffer);
                     const workbook = XLSX.read(data, {type: 'array'});
                     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                     const json = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
-                    const rows = json.slice(5); 
+                    const rows = json.slice(5);
+                    console.log('Rows count:', rows.length);
                     processData(rows);
                 } catch (error) {
+                    console.error('Parse error:', error);
                     alert("文件解析出错: " + error.message);
                     document.getElementById('result-area').innerHTML = '<div class="empty-state">文件解析出错</div>';
                 }
             })
             .catch(error => {
+                console.error('Fetch error:', error);
                 alert("加载文件失败: " + error.message);
                 document.getElementById('result-area').innerHTML = '<div class="empty-state">加载文件失败</div>';
             });
