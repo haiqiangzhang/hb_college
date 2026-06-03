@@ -135,6 +135,8 @@
 
         const filename = year === '2024' ? '20240722163024_933.xlsx' : '20250722214852_210.xlsx';
         
+        document.getElementById('result-area').innerHTML = '<div class="empty-state">正在加载数据...</div>';
+        
         fetch(filename)
             .then(response => {
                 if (!response.ok) throw new Error('网络请求失败');
@@ -150,10 +152,12 @@
                     processData(rows);
                 } catch (error) {
                     alert("文件解析出错: " + error.message);
+                    document.getElementById('result-area').innerHTML = '<div class="empty-state">文件解析出错</div>';
                 }
             })
             .catch(error => {
                 alert("加载文件失败: " + error.message);
+                document.getElementById('result-area').innerHTML = '<div class="empty-state">加载文件失败</div>';
             });
     }
 
