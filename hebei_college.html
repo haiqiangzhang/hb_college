@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>河北高考投档线查询 (专业级筛选版)</title>
+    <script src="embedded_data.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; padding: 20px; color: #333; }
@@ -133,40 +134,17 @@
         const year = document.getElementById('yearSelect').value;
         if (!year) return;
 
-        const filename = year === '2024' ? '20240722163024_933.xlsx' : '20250722214852_210.xlsx';
-        const fileUrl = window.location.origin + '/' + filename;
-        
         document.getElementById('result-area').innerHTML = '<div class="empty-state">正在加载数据...</div>';
         
-        console.log('Loading file:', fileUrl);
-        
-        fetch(fileUrl)
-            .then(response => {
-                console.log('Response status:', response.status);
-                if (!response.ok) throw new Error('HTTP error, status = ' + response.status);
-                return response.arrayBuffer();
-            })
-            .then(buffer => {
-                console.log('File loaded, size:', buffer.byteLength);
-                try {
-                    const data = new Uint8Array(buffer);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const json = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
-                    const rows = json.slice(5);
-                    console.log('Rows count:', rows.length);
-                    processData(rows);
-                } catch (error) {
-                    console.error('Parse error:', error);
-                    alert("文件解析出错: " + error.message);
-                    document.getElementById('result-area').innerHTML = '<div class="empty-state">文件解析出错</div>';
-                }
-            })
-            .catch(error => {
-                console.error('Fetch error:', error);
-                alert("加载文件失败: " + error.message);
-                document.getElementById('result-area').innerHTML = '<div class="empty-state">加载文件失败</div>';
-            });
+        setTimeout(() => {
+            const rows = embeddedData[year];
+            if (rows && rows.length > 0) {
+                processData(rows);
+            } else {
+                alert("未找到" + year + "年的数据");
+                document.getElementById('result-area').innerHTML = '<div class="empty-state">未找到数据</div>';
+            }
+        }, 10);
     }
 
     document.getElementById('fileInput').addEventListener('change', function(e) {
